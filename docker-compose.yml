@@ -1,0 +1,19 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./src/data/clickhouse_schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    environment:
+      - CLICKHOUSE_DB=adtech
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  clickhouse_data:
