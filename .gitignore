@@ -6,3 +6,10 @@ data/chroma/
 .venv/
 venv/
 *.egg-info/
+
+# Local runtime data: user accounts, sessions and chat history
+data/*.db
+data/*.sqlite3
+# Archives and ad-hoc backups
+*.zip
+static_backup_*/

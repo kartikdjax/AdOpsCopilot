@@ -53,6 +53,51 @@ This prints verification output proving the CTR step-change and anomaly
 day are actually present in the generated data before you ever touch
 ClickHouse.
 
+## Revive admin copilot
+
+Revive mode answers ad-server questions from a real Revive Adserver MySQL
+database (`revive608`): delivery and revenue by zone, banner, campaign,
+advertiser, website or manager; setup inspection and health checks; the
+audit log; and maintenance status. The full question map and plan live in
+`docs/`.
+
+### Set up and run
+
+```bash
+cp .env.example .env                               # fill in GROQ_API_KEY and MYSQL_*
+python -m src.revive_data.load_revive_data --days 30   # synthetic data + planted problems
+python -m src.rag.load_seed_documents              # playbooks for search_knowledge_base
+uvicorn src.api.main:app --port 8000
+```
+
+The loader only replaces synthetic rows. It never touches Revive's own
+admin login, the Default manager, or Revive's own audit history.
+
+### Access
+
+Every new sign-up is `pending` and can't use Revive until an admin grants a
+role from the server (there's no web endpoint for this on purpose):
+
+```bash
+python -m src.api.manage_users list
+python -m src.api.manage_users set-role you@example.com admin
+python -m src.api.manage_users set-role ops@example.com manager --agency-id 2
+```
+
+An `admin` sees all of Revive. A `manager` sees only that Revive manager's
+advertisers, websites, campaigns, zones, users and audit events. The scope
+travels to the MCP tools as request metadata, so the LLM can't see or widen it.
+
+### Tests
+
+```bash
+python -m tests.verify_access_control      # plus the other tests/verify_*.py scripts
+python -m tests.test_revive_scenarios      # LLM eval over the admin question map
+```
+
+The `verify_*` scripts are deterministic. `test_revive_scenarios` calls the
+real LLM, so expect some run-to-run variation in its pass count.
+
 ## Roadmap
 
 - [x] Phase 1: ClickHouse schema + synthetic data generator

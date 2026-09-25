@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Analytics Copilot</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Sign in gate. Shown until /auth/me confirms a session. -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="header-title auth-brand">
+        <span class="header-dot"></span>
+        <h1>AI Analytics Copilot</h1>
+      </div>
+      <p class="auth-sub">Sign in to access your saved conversations.</p>
+
+      <form id="signin-form" class="auth-form">
+        <input type="text" id="signin-email" placeholder="Username" autocomplete="username" required />
+        <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" required />
+        <button type="submit" class="btn-primary">Sign in</button>
+      </form>
+
+      <p id="auth-error" class="auth-error" hidden></p>
+    </div>
+  </div>
+
+  <!-- Main app. Hidden until authenticated. -->
+  <div id="app" class="app" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <div class="header-title">
+          <span class="header-dot"></span>
+          <h1>Copilot</h1>
+        </div>
+        <button type="button" id="close-sidebar" class="icon-btn mobile-only" aria-label="Close menu">&times;</button>
+      </div>
+
+      <button id="new-chat-btn" class="btn-primary sidebar-new-chat">+ New chat</button>
+
+      <div class="mode-tabs" id="mode-tabs">
+        <button type="button" class="mode-tab active" data-mode="revive">Revive</button>
+        <button type="button" class="mode-tab" data-mode="exchange">Exchange</button>
+      </div>
+
+      <nav class="side-nav">
+        <button type="button" class="nav-item active" data-panel="chats">Chats</button>
+        <button type="button" class="nav-item" data-panel="tools">MCP tools</button>
+        <button type="button" class="nav-item" data-panel="tour">Take a tour</button>
+      </nav>
+
+      <div class="history-section">
+        <div class="history-label">History</div>
+        <div id="history-list" class="history-list"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="avatar" id="user-avatar">U</div>
+        <div class="user-chip">
+          <span id="user-name" class="user-name"></span>
+          <span id="user-email" class="user-email"></span>
+          <span id="user-role" class="user-role"></span>
+        </div>
+        <button type="button" id="signout-btn" class="btn-ghost" title="Sign out">Sign out</button>
+      </div>
+    </aside>
+
+    <div id="sidebar-overlay" class="overlay"></div>
+
+    <main class="chat-panel">
+      <header class="app-header">
+        <button type="button" id="open-sidebar" class="icon-btn mobile-only" aria-label="Open menu">&#9776;</button>
+        <div class="header-title">
+          <div class="eyebrow" id="mode-eyebrow">Revive</div>
+          <h2 id="conv-title">New conversation</h2>
+        </div>
+      </header>
+
+      <div class="content">
+        <section id="panel-chats" class="panel active">
+          <main id="chat-log" class="chat-log">
+            <div class="welcome" id="welcome">
+              <h2>Ask about your ad server</h2>
+              <div class="suggestions" id="suggestions"></div>
+            </div>
+          </main>
+
+          <form id="chat-form" class="chat-input-bar">
+            <textarea
+              id="chat-input"
+              rows="1"
+              placeholder="Ask about a campaign, trend, or policy..."
+              maxlength="2000"
+            ></textarea>
+            <button type="submit" id="send-btn" class="btn-primary">Send</button>
+          </form>
+          <div class="input-hint">Enter to send &middot; Shift+Enter for a new line &middot; Conversations save automatically</div>
+        </section>
+
+        <section id="panel-tools" class="panel">
+          <div class="panel-title">
+            <h2>MCP tools</h2>
+            <p>Governed tools the copilot can call on your behalf. It only uses these, never raw guesses. Each mode loads the shared tools plus its own.</p>
+          </div>
+          <div id="tools-list" class="tools-grid"><div class="loading">Loading tools&hellip;</div></div>
+        </section>
+
+        <section id="panel-tour" class="panel">
+          <div class="panel-title">
+            <h2>Take a tour</h2>
+            <p>A quick end-user workflow, from question to evidence-backed answer.</p>
+          </div>
+          <div id="tour-content"><div class="loading">Loading tour&hellip;</div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

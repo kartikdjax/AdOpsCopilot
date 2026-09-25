@@ -6,9 +6,14 @@ services:
       - "9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
-      - ./src/data/clickhouse_schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./src/data/clickhouse_schema.sql:/docker-entrypoint-initdb.d/01_adtech_schema.sql
+      - ./src/revive_data/revive_schema.sql:/docker-entrypoint-initdb.d/02_revive_schema.sql
+      - ./src/adexchange_data/adexchange_schema.sql:/docker-entrypoint-initdb.d/03_adexchange_schema.sql
     environment:
       - CLICKHOUSE_DB=adtech
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=dev_local_password
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
 
   redis:
     image: redis:7-alpine
