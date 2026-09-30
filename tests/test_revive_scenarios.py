@@ -1,7 +1,7 @@
 """
 Golden question set for Revive mode - the admin question map from the
 Revive Admin Copilot plan, run end to end through the real LLM, the MCP
-server (mcp_server_v2) and the live revive608 data.
+server (mcp_server) and the live revive608 data.
 
 Like test_orchestrator_scenarios.py (which covers the older v1 server),
 this is an INTEGRATION eval, not a unit test: it checks that the model
@@ -26,7 +26,7 @@ import asyncio
 from mcp import Client
 
 from src.config import get_settings
-from src.mcp_server_v2 import mcp
+from src.mcp_server import mcp
 from src.orchestrator import answer_question
 from src.provider_factory import build_provider
 from src.semantic.access import ADMIN, Scope

@@ -15,7 +15,7 @@ from src.api.models import ChatRequest, ChatResponse, HealthResponse
 from src.api.tour import router as tour_router
 from src.config import get_settings
 from src.llm_providers.groq_provider import AllModelsFailedError
-from src.mcp_server_v2 import mcp
+from src.mcp_server import mcp
 from src.orchestrator import answer_question
 from src.provider_factory import build_provider
 from src.api.db import get_db

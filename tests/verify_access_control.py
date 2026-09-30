@@ -122,7 +122,7 @@ def main() -> None:
 
 
 async def _mcp_checks() -> None:
-    from src.mcp_server_v2 import mcp
+    from src.mcp_server import mcp
 
     async with Client(mcp) as client:
         tools = (await client.list_tools()).tools

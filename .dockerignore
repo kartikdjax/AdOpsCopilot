@@ -1,0 +1,9 @@
+.venv/
+.git/
+.env
+data/
+tests/
+docs/
+*.zip
+static_backup_*/
+**/__pycache__/

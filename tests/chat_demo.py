@@ -16,7 +16,7 @@ from mcp import Client
 
 from src.config import get_settings
 from src.llm_providers.groq_provider import AllModelsFailedError
-from src.mcp_server_v2 import mcp
+from src.mcp_server import mcp
 from src.orchestrator import answer_question
 from src.semantic.access import ADMIN
 from src.provider_factory import build_provider

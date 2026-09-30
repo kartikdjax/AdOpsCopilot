@@ -7,7 +7,6 @@ sentence-transformers>=3.0
 anthropic>=0.34
 mcp>=2,<3
 httpx>=0.27
-redis>=5.0
 clickhouse-connect>=0.7
 pymysql>=1.1
 phpserialize>=1.3

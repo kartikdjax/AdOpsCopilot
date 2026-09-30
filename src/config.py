@@ -9,10 +9,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    # ClickHouse - exchange domain only
+    # ClickHouse - exchange domain only (queries name the adexchange database)
     clickhouse_host: str = "localhost"
     clickhouse_port: int = 8123
-    clickhouse_database: str = "adtech"
     clickhouse_username: str = "default"
     clickhouse_password: str = "dev_local_password"
 
@@ -22,11 +21,6 @@ class Settings(BaseSettings):
     mysql_database: str = "revive608"
     mysql_username: str = "root"
     mysql_password: str = ""  # set MYSQL_PASSWORD in .env
-
-    # Redis
-    redis_host: str = "localhost"
-    redis_port: int = 6379
-    cache_ttl_seconds: int = 3600
 
     # LLM provider selection - "groq" (free, default) or "anthropic"
     llm_provider: str = "groq"
