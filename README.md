@@ -86,6 +86,36 @@ The planted problems are relative to load time (a campaign "ends in 3 days"),
 so reload before running the live tests if the data is more than a day old:
 `python -m src.revive_data.load_revive_data --days 30`.
 
+## Metric catalogue MCP server
+
+A separate, read-only MCP server (`src/mcp_catalogue/`) that tells any MCP
+client which metrics the Copilot knows and how each is calculated. It has
+three tools: `list_domains`, `list_metrics(domain)` and
+`get_metric_definition(domain, metric)`, with answers identical to the
+Copilot's own metric tools. It needs no database, LLM or `.env`.
+
+It is not the Copilot's MCP server: the API never loads it, it never appears
+in a chat, and the Copilot's 19 tools stay in-process only.
+`tests/live/test_copilot_mcp_tools_unchanged.py` fails if those tools change.
+
+```bash
+python -m src.mcp_catalogue.server                     # stdio (a client starts it)
+python -m src.mcp_catalogue.server --transport http    # http://127.0.0.1:8765/mcp
+python -m src.mcp_catalogue.server --transport http --host 0.0.0.0 --port 9000   # reachable from other machines
+
+python -m src.mcp_catalogue.client list_domains                          # starts the server over stdio
+python -m src.mcp_catalogue.client get_metric_definition revive ctr
+python -m src.mcp_catalogue.client --url http://127.0.0.1:8765/mcp list_metrics exchange
+```
+
+`.mcp.json` registers it for Claude Code over stdio as
+`copilot-metric-catalogue`; Claude Code asks you to approve it the first time.
+It runs `.venv/bin/python`, so edit the command there if your environment
+lives elsewhere.
+
+`tests/unit/test_mcp_transports.py` checks that the same calls give identical
+tool lists, schemas, results and errors in-memory, over stdio and over HTTP.
+
 ## Access
 
 Every new sign-up is `pending` and can't use Revive until an admin grants a

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "copilot-metric-catalogue": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "src.mcp_catalogue.server"]
+    }
+  }
+}
