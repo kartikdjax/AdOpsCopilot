@@ -5,7 +5,7 @@ Revive Adserver MySQL database via src.semantic.mysql_query_builder.
 
 Kept deliberately thin and separate from the query builders: the builders
 decide query SHAPE (pure functions, fully unit-testable without a database
-- see verify_semantic_layer.py), this class handles the two things that
+- see tests/unit/test_semantic_layer.py), this class handles the two things that
 need a live connection - picking the right backend for the domain, and
 binding the entity_id runtime value before running it.
 """

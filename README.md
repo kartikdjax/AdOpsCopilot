@@ -1,79 +1,75 @@
 # AI Analytics Copilot
 
 Conversational analytics for AdTech data: natural-language Q&A, KPI
-summaries, trend analysis, anomaly explanations, and automated report
-generation — delivered as a standalone web app backed by MCP tools.
+summaries, trend analysis, anomaly explanations, health checks and
+reports, delivered as a standalone web app backed by MCP tools.
 
 Single-tenant deployment: one instance per customer, on-prem or in their
-own cloud. Data lives in ClickHouse (analytics) + Redis (cache).
+own cloud.
 
-## Status: Phase 1 complete — synthetic data foundation
+## How it fits together
 
-Since there's no live data source yet, Phase 1 builds a realistic,
-labeled synthetic dataset so every later feature has real signal to work
-against, instead of being demoed on noise.
+- **Web UI** (`static/`) and **FastAPI backend** (`src/api/`): sign-up and
+  sign-in, per-user chat history (SQLite in `data/`), and `/chat`.
+- **Orchestrator** (`src/orchestrator.py`): the LLM tool-use loop. Groq by
+  default, Anthropic optional (`LLM_PROVIDER`).
+- **MCP server** (`src/mcp_server.py`): 19 tools, run in-process by the API.
+  A conversation runs in one mode and sees only the 11 core tools plus that
+  mode's tools (`src/semantic/tool_domains.py`).
+- **Semantic layer** (`src/semantic/`): metric definitions and query builders,
+  so the LLM picks metrics and entities, never SQL.
+- **Knowledge base** (`src/rag/`): Chroma store of playbooks for
+  `search_knowledge_base`.
 
-### What's in this phase
+Two modes, two data sources:
 
-- **`src/data/clickhouse_schema.sql`** — fact table (`ad_events`) +
-  auto-aggregating materialized view (`daily_campaign_stats`) for fast
-  KPI queries.
-- **`src/data/generate_synthetic_data.py`** — generates campaigns with
-  five DELIBERATE scenarios, verified to produce the intended pattern:
-  - `stable` — baseline, noise only
-  - `ctr_improvement` — a step-change in CTR at the midpoint (mirrors a
-    real "targeting update" story)
-  - `budget_exhaustion` — delivery gets capped once spend would exceed
-    daily budget
-  - `ctr_anomaly_drop` — a single-day CTR crash, isolated and recoverable
-  - `seasonal_spend_growth` — gradual, compounding spend growth
-- **`src/data/load_to_clickhouse.py`** — writes the generated dataset
-  into a real ClickHouse instance, chunked for large volumes.
-- **`docker-compose.yml`** — local ClickHouse + Redis, schema auto-applied
-  on first start.
+| Mode | Data | Where |
+|---|---|---|
+| `revive` | Revive Adserver ad-server data: delivery and revenue by zone, banner, campaign, advertiser, website or manager; setup inspection and health checks; audit log; maintenance status | Revive's MySQL database (`revive608` locally) |
+| `exchange` | Ad exchange auctions: win rate, bid prices, timeouts, supply/demand partners, real-time health | ClickHouse `adexchange` database |
 
-### Run it
+The question map and plan for Revive mode are in `docs/`.
+
+## Run it locally
 
 ```bash
-docker compose up -d                    # starts ClickHouse + Redis, applies schema
-pip install -r requirements.txt
+docker compose up -d                                 # ClickHouse, adexchange schema applied on first start
+python -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env                                 # fill in GROQ_API_KEY and MYSQL_*
 
-# Fast local test (small volume, ~10 seconds)
-python -m src.data.load_to_clickhouse --days 30 --scale 0.05
-
-# Full-scale demo dataset (~5M events, 60 days)
-python -m src.data.load_to_clickhouse --days 60 --scale 1.0
-```
-
-Verify: `clickhouse-client --query "SELECT scenario_hint, count() FROM adtech.ad_events GROUP BY campaign_id"` or just run the generator standalone first (no ClickHouse needed):
-```bash
-python src/data/generate_synthetic_data.py --days 60 --scale 0.05
-```
-This prints verification output proving the CTR step-change and anomaly
-day are actually present in the generated data before you ever touch
-ClickHouse.
-
-## Revive admin copilot
-
-Revive mode answers ad-server questions from a real Revive Adserver MySQL
-database (`revive608`): delivery and revenue by zone, banner, campaign,
-advertiser, website or manager; setup inspection and health checks; the
-audit log; and maintenance status. The full question map and plan live in
-`docs/`.
-
-### Set up and run
-
-```bash
-cp .env.example .env                               # fill in GROQ_API_KEY and MYSQL_*
-python -m src.revive_data.load_revive_data --days 30   # synthetic data + planted problems
-python -m src.rag.load_seed_documents              # playbooks for search_knowledge_base
+python -m src.adexchange_data.load_adexchange_data   # synthetic exchange data
+python -m src.revive_data.load_revive_data --claim revive608 --days 30   # first time only; see below
+python -m src.rag.load_seed_documents                # playbooks for search_knowledge_base
 uvicorn src.api.main:app --port 8000
 ```
 
-The loader only replaces synthetic rows. It never touches Revive's own
-admin login, the Default manager, or Revive's own audit history.
+Revive's MySQL stays outside compose: point `MYSQL_*` at a Revive 6.0.x
+install whose database the Copilot owns.
 
-### Access
+To run the API in a container too: `docker compose --profile app up -d`.
+Inside the container, `MYSQL_HOST=host.docker.internal` reaches a MySQL on
+the host (it must listen on more than 127.0.0.1).
+
+### Synthetic Revive data and the loader guard
+
+`load_revive_data` replaces every advertiser, campaign, banner, zone, website
+and stats row in its target database, and plants known problems for the
+health checks and audit log to find. It refuses to run unless:
+
+- the database has been claimed once with `--claim <database>` (the name must
+  match the target), which creates a `copilot_synthetic_marker` table; and
+- every row in the tables it replaces looks like one the generator wrote.
+
+So a wrong `MYSQL_DATABASE` can't wipe a real install, and a row someone adds
+through Revive's UI is reported instead of silently deleted. The loader never
+touches Revive's own admin login, the Default manager, or Revive's own audit
+history.
+
+The planted problems are relative to load time (a campaign "ends in 3 days"),
+so reload before running the live tests if the data is more than a day old:
+`python -m src.revive_data.load_revive_data --days 30`.
+
+## Access
 
 Every new sign-up is `pending` and can't use Revive until an admin grants a
 role from the server (there's no web endpoint for this on purpose):
@@ -88,21 +84,22 @@ An `admin` sees all of Revive. A `manager` sees only that Revive manager's
 advertisers, websites, campaigns, zones, users and audit events. The scope
 travels to the MCP tools as request metadata, so the LLM can't see or widen it.
 
-### Tests
+## Tests
 
 ```bash
-python -m tests.verify_access_control      # plus the other tests/verify_*.py scripts
-python -m tests.test_revive_scenarios      # LLM eval over the admin question map
+pytest                    # everything
+pytest tests/unit         # no databases needed
+pytest -m live            # only the tests that read revive608 and ClickHouse
 ```
 
-The `verify_*` scripts are deterministic. `test_revive_scenarios` calls the
-real LLM, so expect some run-to-run variation in its pass count.
-
-## Roadmap
-
-- [x] Phase 1: ClickHouse schema + synthetic data generator
-- [ ] Phase 2: MCP tools — KPI summary, trend analysis, anomaly detection, report generation
-- [ ] Phase 3: RAG knowledge base (policies, historical explanations) alongside structured tools
-- [ ] Phase 4: Agent orchestrator — Claude tool-use loop
-- [ ] Phase 5: Web chat frontend
-- [ ] Phase 6: Packaging for sale — per-customer config, auth, licensing hooks
+- `tests/unit/`: generators, analytics, semantic layer, core tools, mode
+  filtering, access scopes and the loader guard, using fake clients or
+  in-memory SQLite.
+- `tests/live/`: access control, Revive health checks, inspect and audit log
+  against the loaded `revive608` and ClickHouse. They skip, with the reason,
+  when a database is unreachable, unclaimed or loaded more than 24 hours ago.
+- `evals/revive_scenarios.py`: the Revive question map run through the real
+  LLM (`python -m evals.revive_scenarios`). Not part of pytest: the model's
+  tool choice varies from run to run, so read its pass count as a signal, not
+  a gate.
+- `scripts/chat_demo.py`: interactive CLI chat (`python -m scripts.chat_demo`).

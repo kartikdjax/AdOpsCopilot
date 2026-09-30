@@ -237,7 +237,7 @@ def build_child_breakdown_query(
     # client already joins rv_campaigns for the parent filter, and the
     # child breakdown is also campaigns), reuse that join instead of
     # joining the same table a second time under a different alias -
-    # a real duplicate-join bug caught by verify_semantic_layer.py.
+    # a real duplicate-join bug caught by tests/unit/test_semantic_layer.py.
     label_already_joined = any(child.label_table in j for j in all_joins)
     join_sql = "" if not all_joins else " " + " ".join(all_joins)
     if not label_already_joined:

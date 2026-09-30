@@ -6,7 +6,7 @@ the LLM for the whole session.
 Requires GROQ_API_KEY in .env, both ClickHouse domains loaded, and the
 knowledge base seeded.
 
-Run: python -m tests.chat_demo
+Run: python -m scripts.chat_demo
 """
 from __future__ import annotations
 

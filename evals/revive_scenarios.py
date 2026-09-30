@@ -3,8 +3,7 @@ Golden question set for Revive mode - the admin question map from the
 Revive Admin Copilot plan, run end to end through the real LLM, the MCP
 server (mcp_server) and the live revive608 data.
 
-Like test_orchestrator_scenarios.py (which covers the older v1 server),
-this is an INTEGRATION eval, not a unit test: it checks that the model
+This is an INTEGRATION eval, not a pytest test: it checks that the model
 picks a suitable tool and that the answer names what the planted data
 says it should (admin_fixtures.PLANTED and the zone scenarios). A failure
 means "look at this question", not necessarily a code bug - LLM tool
@@ -14,9 +13,9 @@ Requires: LLM credentials in .env, revive608 loaded
 (python -m src.revive_data.load_revive_data --days 30) and the knowledge
 base seeded (python -m src.rag.load_seed_documents).
 
-Run: python -m tests.test_revive_scenarios                 # everything
-     python -m tests.test_revive_scenarios --only C D      # some areas
-     python -m tests.test_revive_scenarios --delay 5       # gentler on rate limits
+Run: python -m evals.revive_scenarios                 # everything
+     python -m evals.revive_scenarios --only C D      # some areas
+     python -m evals.revive_scenarios --delay 5       # gentler on rate limits
 """
 from __future__ import annotations
 
