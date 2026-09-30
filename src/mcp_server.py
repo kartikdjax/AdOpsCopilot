@@ -71,6 +71,12 @@ _analytics = AnalyticsClient(_settings)
 _kb = KnowledgeBaseStore(_settings)
 
 
+def analytics_client() -> AnalyticsClient:
+    """The unscoped client the tools use - for the API's health checks, so
+    they test the same connections the tools depend on."""
+    return _analytics
+
+
 def _client(ctx: Context, domain: str) -> AnalyticsClient:
     """The data client for this call. Revive data is limited to the caller's
     scope, read from MCP request metadata the orchestrator attaches (never

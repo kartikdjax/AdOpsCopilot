@@ -50,6 +50,23 @@ To run the API in a container too: `docker compose --profile app up -d`.
 Inside the container, `MYSQL_HOST=host.docker.internal` reaches a MySQL on
 the host (it must listen on more than 127.0.0.1).
 
+### Health check
+
+`GET /health` needs no sign-in and reports whether each data source answers:
+
+```json
+{"status": "degraded", "provider": "groq", "active_sessions": 3,
+ "dependencies": {"revive": "up", "exchange": "down"}}
+```
+
+`status` is `ok` only when every dependency is `up`. Each check gives up after
+2 seconds, so the endpoint answers within about 2 seconds even when a database
+hangs. It returns 200 when degraded too: the API itself is alive, and a
+liveness probe restarting it wouldn't fix a database. Why a check failed goes
+to the server log, never into the response. The API can't start while
+ClickHouse is down (it connects at startup), so `exchange: down` means
+ClickHouse failed after startup.
+
 ### Synthetic Revive data and the loader guard
 
 `load_revive_data` replaces every advertiser, campaign, banner, zone, website
