@@ -3,19 +3,21 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from functools import partial
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from mcp import Client
 
 from src.api.auth import get_current_user, router as auth_router, user_scope
+from src.api.health import check_dependencies
 from src.api.history import router as history_router
 from src.api.mcp_guidance import router as mcp_router
 from src.api.models import ChatRequest, ChatResponse, HealthResponse
 from src.api.tour import router as tour_router
 from src.config import get_settings
 from src.llm_providers.groq_provider import AllModelsFailedError
-from src.mcp_server_v2 import mcp
+from src.mcp_server import analytics_client, mcp
 from src.orchestrator import answer_question
 from src.provider_factory import build_provider
 from src.api.db import get_db
@@ -108,12 +110,20 @@ async def clear_session(session_id: str, mode: str, user=Depends(get_current_use
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
+    """No sign-in needed. Reports each data source as up/down, never how it's
+    reached; "degraded" still answers 200 because the API itself is alive."""
     settings = app_state.get("settings")
     db = get_db()
     try:
         active = db.execute("SELECT COUNT(*) AS n FROM sessions").fetchone()["n"]
     finally:
         db.close()
-    return HealthResponse(status="ok", provider=settings.llm_provider if settings else "unknown", active_sessions=active)
+    analytics = analytics_client()
+    status, dependencies = await check_dependencies({
+        "revive": partial(analytics.ping, "revive"),
+        "exchange": partial(analytics.ping, "exchange"),
+    })
+    return HealthResponse(status=status, provider=settings.llm_provider if settings else "unknown",
+                          active_sessions=active, dependencies=dependencies)
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

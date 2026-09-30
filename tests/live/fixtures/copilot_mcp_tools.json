@@ -1,0 +1,712 @@
+{
+  "analyze_trend": {
+    "properties": {
+      "days": {
+        "default": 30,
+        "title": "Days",
+        "type": "integer"
+      },
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      },
+      "entity_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Id"
+      },
+      "entity_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Type"
+      },
+      "metric": {
+        "title": "Metric",
+        "type": "string"
+      }
+    },
+    "required": [
+      "domain",
+      "metric"
+    ],
+    "title": "analyze_trendArguments",
+    "type": "object"
+  },
+  "calculate_kpi": {
+    "properties": {
+      "days": {
+        "default": 30,
+        "title": "Days",
+        "type": "integer"
+      },
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      },
+      "entity_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Id"
+      },
+      "entity_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Type"
+      },
+      "metric": {
+        "title": "Metric",
+        "type": "string"
+      }
+    },
+    "required": [
+      "domain",
+      "metric"
+    ],
+    "title": "calculate_kpiArguments",
+    "type": "object"
+  },
+  "compare_periods": {
+    "properties": {
+      "days": {
+        "default": 14,
+        "title": "Days",
+        "type": "integer"
+      },
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      },
+      "entity_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Id"
+      },
+      "entity_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Type"
+      },
+      "metric": {
+        "title": "Metric",
+        "type": "string"
+      }
+    },
+    "required": [
+      "domain",
+      "metric"
+    ],
+    "title": "compare_periodsArguments",
+    "type": "object"
+  },
+  "detect_anomalies": {
+    "properties": {
+      "days": {
+        "default": 30,
+        "title": "Days",
+        "type": "integer"
+      },
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      },
+      "entity_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Id"
+      },
+      "entity_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Type"
+      },
+      "metric": {
+        "title": "Metric",
+        "type": "string"
+      },
+      "sensitivity": {
+        "default": "normal",
+        "title": "Sensitivity",
+        "type": "string"
+      }
+    },
+    "required": [
+      "domain",
+      "metric"
+    ],
+    "title": "detect_anomaliesArguments",
+    "type": "object"
+  },
+  "explain_metric_change": {
+    "properties": {
+      "days": {
+        "default": 14,
+        "title": "Days",
+        "type": "integer"
+      },
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      },
+      "entity_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Id"
+      },
+      "entity_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Entity Type"
+      },
+      "metric": {
+        "title": "Metric",
+        "type": "string"
+      },
+      "top_n": {
+        "default": 5,
+        "title": "Top N",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "domain",
+      "metric"
+    ],
+    "title": "explain_metric_changeArguments",
+    "type": "object"
+  },
+  "generate_exchange_report": {
+    "properties": {
+      "days": {
+        "default": 30,
+        "title": "Days",
+        "type": "integer"
+      },
+      "entity_id": {
+        "title": "Entity Id",
+        "type": "integer"
+      },
+      "entity_type": {
+        "title": "Entity Type",
+        "type": "string"
+      }
+    },
+    "required": [
+      "entity_type",
+      "entity_id"
+    ],
+    "title": "generate_exchange_reportArguments",
+    "type": "object"
+  },
+  "generate_revive_report": {
+    "properties": {
+      "days": {
+        "default": 30,
+        "title": "Days",
+        "type": "integer"
+      },
+      "entity_id": {
+        "title": "Entity Id",
+        "type": "integer"
+      },
+      "entity_type": {
+        "title": "Entity Type",
+        "type": "string"
+      }
+    },
+    "required": [
+      "entity_type",
+      "entity_id"
+    ],
+    "title": "generate_revive_reportArguments",
+    "type": "object"
+  },
+  "get_banner_zone_mapping": {
+    "properties": {
+      "banner_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Banner Id"
+      },
+      "days": {
+        "default": 30,
+        "title": "Days",
+        "type": "integer"
+      },
+      "zone_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Zone Id"
+      }
+    },
+    "title": "get_banner_zone_mappingArguments",
+    "type": "object"
+  },
+  "get_data_freshness": {
+    "properties": {
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      }
+    },
+    "required": [
+      "domain"
+    ],
+    "title": "get_data_freshnessArguments",
+    "type": "object"
+  },
+  "get_metric_definition": {
+    "properties": {
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      },
+      "metric": {
+        "title": "Metric",
+        "type": "string"
+      }
+    },
+    "required": [
+      "domain",
+      "metric"
+    ],
+    "title": "get_metric_definitionArguments",
+    "type": "object"
+  },
+  "get_realtime_exchange_health": {
+    "properties": {
+      "ad_unit_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Ad Unit Id"
+      },
+      "demand_partner_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Demand Partner Id"
+      },
+      "minutes": {
+        "default": 15,
+        "title": "Minutes",
+        "type": "integer"
+      }
+    },
+    "title": "get_realtime_exchange_healthArguments",
+    "type": "object"
+  },
+  "get_revive_audit_log": {
+    "properties": {
+      "action": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Action"
+      },
+      "days": {
+        "default": 7,
+        "title": "Days",
+        "type": "integer"
+      },
+      "object_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Object Id"
+      },
+      "object_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Object Type"
+      },
+      "username": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Username"
+      }
+    },
+    "title": "get_revive_audit_logArguments",
+    "type": "object"
+  },
+  "get_supply_demand_cross_analysis": {
+    "properties": {
+      "days": {
+        "default": 30,
+        "title": "Days",
+        "type": "integer"
+      },
+      "demand_partner_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Demand Partner Id"
+      },
+      "metric": {
+        "default": "win_rate",
+        "title": "Metric",
+        "type": "string"
+      },
+      "supply_partner_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Supply Partner Id"
+      }
+    },
+    "title": "get_supply_demand_cross_analysisArguments",
+    "type": "object"
+  },
+  "inspect_revive_object": {
+    "properties": {
+      "object_id": {
+        "title": "Object Id",
+        "type": "integer"
+      },
+      "object_type": {
+        "title": "Object Type",
+        "type": "string"
+      }
+    },
+    "required": [
+      "object_type",
+      "object_id"
+    ],
+    "title": "inspect_revive_objectArguments",
+    "type": "object"
+  },
+  "list_available_metrics": {
+    "properties": {
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      }
+    },
+    "required": [
+      "domain"
+    ],
+    "title": "list_available_metricsArguments",
+    "type": "object"
+  },
+  "list_entities": {
+    "properties": {
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      },
+      "entity_type": {
+        "title": "Entity Type",
+        "type": "string"
+      },
+      "limit": {
+        "default": 50,
+        "title": "Limit",
+        "type": "integer"
+      },
+      "parent_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Parent Id"
+      },
+      "parent_type": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Parent Type"
+      },
+      "search": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Search"
+      }
+    },
+    "required": [
+      "domain",
+      "entity_type"
+    ],
+    "title": "list_entitiesArguments",
+    "type": "object"
+  },
+  "rank_entities": {
+    "properties": {
+      "ascending": {
+        "default": false,
+        "title": "Ascending",
+        "type": "boolean"
+      },
+      "days": {
+        "default": 30,
+        "title": "Days",
+        "type": "integer"
+      },
+      "domain": {
+        "title": "Domain",
+        "type": "string"
+      },
+      "entity_type": {
+        "title": "Entity Type",
+        "type": "string"
+      },
+      "limit": {
+        "default": 10,
+        "title": "Limit",
+        "type": "integer"
+      },
+      "metric": {
+        "title": "Metric",
+        "type": "string"
+      },
+      "min_volume_metric": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Min Volume Metric"
+      }
+    },
+    "required": [
+      "domain",
+      "metric",
+      "entity_type"
+    ],
+    "title": "rank_entitiesArguments",
+    "type": "object"
+  },
+  "run_revive_check": {
+    "properties": {
+      "check_name": {
+        "title": "Check Name",
+        "type": "string"
+      },
+      "days": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Days"
+      },
+      "hours": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Hours"
+      },
+      "min_requests": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Min Requests"
+      },
+      "threshold_pct": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Threshold Pct"
+      }
+    },
+    "required": [
+      "check_name"
+    ],
+    "title": "run_revive_checkArguments",
+    "type": "object"
+  },
+  "search_knowledge_base": {
+    "properties": {
+      "query": {
+        "title": "Query",
+        "type": "string"
+      },
+      "top_k": {
+        "default": 3,
+        "title": "Top K",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "title": "search_knowledge_baseArguments",
+    "type": "object"
+  }
+}

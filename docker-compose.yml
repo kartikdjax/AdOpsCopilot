@@ -6,19 +6,31 @@ services:
       - "9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
-      - ./src/data/clickhouse_schema.sql:/docker-entrypoint-initdb.d/01_adtech_schema.sql
-      - ./src/revive_data/revive_schema.sql:/docker-entrypoint-initdb.d/02_revive_schema.sql
-      - ./src/adexchange_data/adexchange_schema.sql:/docker-entrypoint-initdb.d/03_adexchange_schema.sql
+      - ./src/adexchange_data/adexchange_schema.sql:/docker-entrypoint-initdb.d/01_adexchange_schema.sql
     environment:
-      - CLICKHOUSE_DB=adtech
+      - CLICKHOUSE_DB=adexchange
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_PASSWORD=dev_local_password
       - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
 
-  redis:
-    image: redis:7-alpine
+  # The API itself. Off by default (local development runs uvicorn from the
+  # venv); start it with: docker compose --profile app up -d
+  # Revive's MySQL stays outside compose; MYSQL_HOST=host.docker.internal
+  # reaches a MySQL running on this machine.
+  api:
+    profiles: ["app"]
+    build: .
     ports:
-      - "6379:6379"
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - clickhouse
 
 volumes:
   clickhouse_data:

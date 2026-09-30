@@ -5,7 +5,7 @@ Revive Adserver MySQL database via src.semantic.mysql_query_builder.
 
 Kept deliberately thin and separate from the query builders: the builders
 decide query SHAPE (pure functions, fully unit-testable without a database
-- see verify_semantic_layer.py), this class handles the two things that
+- see tests/unit/test_semantic_layer.py), this class handles the two things that
 need a live connection - picking the right backend for the domain, and
 binding the entity_id runtime value before running it.
 """
@@ -43,7 +43,9 @@ class AnalyticsClient:
             "mysql+pymysql", username=settings.mysql_username, password=settings.mysql_password,
             host=settings.mysql_host, port=settings.mysql_port, database=settings.mysql_database,
         )
-        self._mysql_engine = create_engine(mysql_url)
+        # connect_timeout bounds how long a health check (or a query) waits
+        # on an unreachable MySQL host; the driver default is much longer.
+        self._mysql_engine = create_engine(mysql_url, connect_args={"connect_timeout": 2})
         # None = admin (all of Revive). Set only through scoped(); see
         # mysql_query_builder.apply_scope for how it narrows each query.
         self._agency_id: int | None = None
@@ -65,6 +67,14 @@ class AnalyticsClient:
         if entity_type and entity_id is not None:
             params = {**params, "entity_id": entity_id}
         return params
+
+    def ping(self, domain: str) -> None:
+        """Raise unless the domain's database answers a trivial query."""
+        if domain == REVIVE:
+            with self._mysql_engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+        else:
+            self._client.command("SELECT 1")
 
     def _mysql_query_df(self, sql: str, params: dict) -> pd.DataFrame:
         return pd.read_sql_query(text(sql), self._mysql_engine, params=params)

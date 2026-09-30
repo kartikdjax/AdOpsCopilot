@@ -1,6 +1,6 @@
 """Pydantic request/response schemas for the API."""
 from __future__ import annotations
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 class ChatRequest(BaseModel):
@@ -14,6 +14,7 @@ class ChatResponse(BaseModel):
     tool_calls_made: list[str]
 
 class HealthResponse(BaseModel):
-    status: str
+    status: Literal["ok", "degraded"]  # "degraded" = at least one dependency is down
     provider: str
     active_sessions: int
+    dependencies: dict[Literal["revive", "exchange"], Literal["up", "down"]]

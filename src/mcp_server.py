@@ -1,212 +1,308 @@
 """
-Phase 2+3 MCP server - now with typed outputs (src/mcp_models.py) instead
-of bare dicts, and errors raised as exceptions (which mcp v2 surfaces as
-a proper tool error, isError=True) instead of returning an ambiguous
-{"error": ...} dict shaped like a partial success.
+The MCP server behind the API: 19 tools total, but at most 16 ever reach the
+LLM in one conversation - 11 core tools (shared, always loaded) + either
+Revive's 5 domain tools or Exchange's 3, chosen by conversation mode.
 
-Run: python -m src.mcp_server
-Test: python -m tests.test_mcp_client
+The MCP protocol itself has no native concept of "modes" - all @_tool()
+functions are always registered. The token savings come from FILTERING at
+the orchestrator layer (see orchestrator.py's `mode` parameter), using the
+TOOL_DOMAIN map (src/semantic/tool_domains.py) to know which tools belong
+to which mode. This file just registers everything; orchestrator.py does
+the actual scoping.
+
+The API runs it in-process (src/api/main.py). Run standalone over stdio:
+python -m src.mcp_server
 """
 from __future__ import annotations
 
+import functools
 import logging
 
-import clickhouse_connect
-import pandas as pd
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
-from src.analytics.anomaly_detection import detect_anomalies
-from src.analytics.trend_analysis import analyze_trend
 from src.config import get_settings
-from src.mcp_models import (
-    AnomalyItem, AnomalyReport, CampaignInfo, CampaignReport,
-    IngestResult, KnowledgeChunk, KnowledgeSearchResult, KPISummary, TrendSummary,
-)
-from src.rag.chunking import recursive_chunk
 from src.rag.vector_store import KnowledgeBaseStore
+from src.semantic import core_tools as ct
+from src.semantic import realtime_exchange as rt
+from src.semantic import report_tools as rp
+from src.semantic.analytics_client import AnalyticsClient
+from src.semantic.core_models import (
+    AnomalyReport, EntityListResult, FreshnessInfo, KpiResult,
+    MetricChangeExplanation, MetricDefinition, MetricInfo, PeriodComparison,
+    RankingResult, TrendSummary,
+)
+from src.semantic.realtime_exchange import RealtimeExchangeHealth
+from src.semantic.report_tools import DomainReport
+
+from src.semantic.cross_analysis import BannerZoneMapping, SupplyDemandCrossAnalysis, get_banner_zone_mapping as _get_banner_zone_mapping
+from src.semantic.cross_analysis import get_supply_demand_cross_analysis as _get_supply_demand_cross
+from src.semantic import revive_admin as ra
+from src.semantic.revive_admin import AuditLogResult, CheckOverview, CheckResult, InspectResult
+from src.semantic.access import Scope
+from src.semantic.metric_registry import REVIVE
+
 
 logging.basicConfig(level=get_settings().log_level)
 logger = logging.getLogger(__name__)
 
 mcp = MCPServer("ai-analytics-copilot")
+
+
+def _tool():
+    """mcp.tool(), except that EXPECTED errors - a bad argument (ValueError)
+    or no access (PermissionError) - reach the LLM with their message, so it
+    can correct itself or explain the refusal. The SDK otherwise replaces
+    any non-ToolError exception with a generic "Error executing tool X";
+    genuine crashes still get that treatment."""
+    register = mcp.tool()
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except (ValueError, PermissionError) as exc:
+                raise ToolError(str(exc)) from exc
+        return register(wrapper)
+    return decorator
 _settings = get_settings()
-_client = clickhouse_connect.get_client(
-    host=_settings.clickhouse_host, port=_settings.clickhouse_port,
-    database=_settings.clickhouse_database,
-    username=_settings.clickhouse_username, password=_settings.clickhouse_password,
-)
+_analytics = AnalyticsClient(_settings)
 _kb = KnowledgeBaseStore(_settings)
 
 
-def _query_daily_stats(campaign_id: int, days: int) -> pd.DataFrame:
-    query = """
-        SELECT
-            event_date,
-            sumMerge(impressions) AS impressions,
-            sumMerge(clicks) AS clicks,
-            sumMerge(conversions) AS conversions,
-            sumMerge(spend) AS spend
-        FROM adtech.daily_campaign_stats
-        WHERE campaign_id = {campaign_id:UInt32}
-          AND event_date >= today() - {days:UInt32}
-        GROUP BY event_date
-        ORDER BY event_date
-    """
-    df = _client.query_df(query, parameters={"campaign_id": campaign_id, "days": days})
-    df["ctr_pct"] = (df["clicks"] / df["impressions"].replace(0, pd.NA) * 100).fillna(0).round(3)
-    df["cvr_pct"] = (df["conversions"] / df["clicks"].replace(0, pd.NA) * 100).fillna(0).round(3)
-    df["event_date"] = pd.to_datetime(df["event_date"])
-    return df
+def analytics_client() -> AnalyticsClient:
+    """The unscoped client the tools use - for the API's health checks, so
+    they test the same connections the tools depend on."""
+    return _analytics
 
 
-@mcp.tool()
-def list_campaigns() -> list[CampaignInfo]:
-    """List all campaigns with their IDs and names, so the user (or the
-    LLM orchestrator) can resolve a campaign name mentioned in a question
-    to the campaign_id these other tools need."""
-    query = "SELECT campaign_id, campaign_name, status, daily_budget FROM adtech.campaigns"
-    df = _client.query_df(query)
-    return [CampaignInfo(**row) for row in df.to_dict(orient="records")]
+def _client(ctx: Context, domain: str) -> AnalyticsClient:
+    """The data client for this call. Revive data is limited to the caller's
+    scope, read from MCP request metadata the orchestrator attaches (never
+    from tool arguments); no scope means no Revive data. Exchange data
+    isn't partitioned by manager, so it's unscoped."""
+    if domain != REVIVE:
+        return _analytics
+    try:
+        scope = Scope.from_meta(ctx.request_context.meta)
+    except PermissionError as exc:
+        # ToolError (not a crash): the refusal reaches the model as-is.
+        raise ToolError(str(exc)) from exc
+    return _analytics.scoped(scope.revive_agency_id)
+
+# ---------------------------------------------------------------------
+# Which mode each tool belongs to. None = core (always loaded).
+# orchestrator.py filters mcp.list_tools() against this before building
+# the provider's tool schema - this is where the actual token savings
+# happen, not in the MCP server itself.
+# ---------------------------------------------------------------------
+from src.semantic.tool_domains import TOOL_DOMAIN
 
 
-@mcp.tool()
-def get_kpi_summary(campaign_id: int, days: int = 30) -> KPISummary:
-    """Get aggregated KPI totals for a campaign over the last N days:
-    impressions, clicks, conversions, spend, CTR, CVR, average CPC.
-
-    Args:
-        campaign_id: the campaign to summarize.
-        days: how many days of history to include.
-    """
-    daily = _query_daily_stats(campaign_id, days)
-    if daily.empty:
-        raise ValueError(f"No data found for campaign_id={campaign_id} in the last {days} days")
-
-    total_impressions = int(daily["impressions"].sum())
-    total_clicks = int(daily["clicks"].sum())
-    total_conversions = int(daily["conversions"].sum())
-    total_spend = float(daily["spend"].sum())
-
-    return KPISummary(
-        campaign_id=campaign_id,
-        period_days=days,
-        impressions=total_impressions,
-        clicks=total_clicks,
-        conversions=total_conversions,
-        spend=round(total_spend, 2),
-        ctr_pct=round(total_clicks / total_impressions * 100, 3) if total_impressions else 0,
-        cvr_pct=round(total_conversions / total_clicks * 100, 3) if total_clicks else 0,
-        avg_cpc=round(total_spend / total_clicks, 4) if total_clicks else 0,
-    )
+# ---------------------------------------------------------------------
+# Core tools (11) - thin wrappers handing off to src.semantic.core_tools,
+# whose logic is already verified in tests/unit/test_core_tools.py.
+# ---------------------------------------------------------------------
+@_tool()
+def list_available_metrics(domain: str) -> list[MetricInfo]:
+    """List every metric available in a domain ('revive' or 'exchange'),
+    with its formula and description. Call this before calculate_kpi if
+    you're not sure a metric exists or what domain it belongs to."""
+    return ct.list_available_metrics(domain)
 
 
-@mcp.tool()
-def analyze_campaign_trend(campaign_id: int, metric: str = "ctr_pct", days: int = 30) -> TrendSummary:
-    """Analyze whether a metric is trending up, down, or stable over time
-    for a campaign, comparing the first half vs second half of the period.
-
-    Args:
-        campaign_id: the campaign to analyze.
-        metric: one of "ctr_pct", "cvr_pct", "spend", "impressions", "clicks".
-        days: how many days of history to analyze.
-    """
-    daily = _query_daily_stats(campaign_id, days)
-    if len(daily) < 4:
-        raise ValueError(f"Not enough data ({len(daily)} days) for a meaningful trend over {days}-day window")
-
-    result = analyze_trend(daily, metric)
-    return TrendSummary(
-        campaign_id=campaign_id, metric=result.metric, direction=result.direction,
-        pct_change=result.pct_change, first_half_avg=result.first_half_avg,
-        second_half_avg=result.second_half_avg,
-    )
+@_tool()
+def get_metric_definition(domain: str, metric: str) -> MetricDefinition:
+    """Get the exact formula and description for one metric. Use this to
+    explain a number to the user rather than guessing at a formula -
+    especially for metrics like fill_rate that mean different things in
+    'revive' vs 'exchange'."""
+    return ct.get_metric_definition(domain, metric)
 
 
-@mcp.tool()
-def detect_campaign_anomalies(campaign_id: int, metric: str = "ctr_pct",
-                               days: int = 30, sensitivity: str = "normal") -> AnomalyReport:
-    """Detect days where a metric deviated unusually from its recent
-    trailing baseline - e.g. a sudden CTR crash or spend spike.
-
-    Args:
-        campaign_id: the campaign to check.
-        metric: one of "ctr_pct", "cvr_pct", "spend", "impressions", "clicks".
-        days: how many days of history to check.
-        sensitivity: "high" (z>=2.0) or "normal" (z>=3.0, recommended
-            default - see Phase 2 notes on false-positive rates at z=2.0).
-    """
-    z_threshold = 2.0 if sensitivity == "high" else 3.0
-    daily = _query_daily_stats(campaign_id, days)
-    if len(daily) < 10:
-        raise ValueError(f"Not enough data ({len(daily)} days) for reliable anomaly detection")
-
-    anomalies = detect_anomalies(daily, metric, window=7, z_threshold=z_threshold)
-    return AnomalyReport(
-        campaign_id=campaign_id, metric=metric, sensitivity=sensitivity,
-        anomalies_found=len(anomalies),
-        anomalies=[
-            AnomalyItem(date=str(a.date.date()), actual=a.actual_value,
-                        expected=a.expected_value, z_score=a.z_score, severity=a.severity)
-            for a in anomalies
-        ],
-    )
+@_tool()
+def list_entities(domain: str, entity_type: str, search: str | None = None,
+                  parent_type: str | None = None, parent_id: int | None = None,
+                  limit: int = 50, *, ctx: Context) -> EntityListResult:
+    """Resolve entity names to the IDs other tools need. entity_type is one
+    of: revive -> zone, banner, campaign, client, affiliate (website/
+    publisher), manager; exchange -> supply_partner, ad_unit,
+    demand_partner, dsp_campaign.
+    `search` matches part of the name, case-insensitive - prefer it over
+    listing everything. Revive only: parent_type + parent_id list one
+    parent's direct children (zone<-affiliate, banner<-campaign,
+    campaign<-client, client<-manager, affiliate<-manager).
+    If `truncated` is true, narrow the search."""
+    return ct.list_entities(_client(ctx, domain), domain, entity_type, search, parent_type, parent_id, limit)
 
 
-@mcp.tool()
-def generate_campaign_report(campaign_id: int, days: int = 30) -> CampaignReport:
-    """Generate a full structured report for a campaign: KPI summary, CTR
-    trend, and any detected anomalies - the raw material for a narrative
-    summary an LLM can turn into a written report.
-
-    Args:
-        campaign_id: the campaign to report on.
-        days: how many days of history to cover.
-    """
-    kpi = get_kpi_summary(campaign_id, days)
-    trend = analyze_campaign_trend(campaign_id, "ctr_pct", days)
-    anomalies = detect_campaign_anomalies(campaign_id, "ctr_pct", days, sensitivity="normal")
-
-    return CampaignReport(campaign_id=campaign_id, period_days=days,
-                           kpi_summary=kpi, ctr_trend=trend, anomalies=anomalies)
+@_tool()
+def get_data_freshness(domain: str, *, ctx: Context) -> FreshnessInfo:
+    """Check how current the data is before reporting on it - avoids
+    silently presenting stale numbers as if they were live. For 'revive'
+    it also returns `system`: Revive version, plugins, and whether the
+    hourly maintenance jobs (statistics, priority) are running - use it
+    for 'is the ad server healthy / is maintenance running' questions."""
+    return ct.get_data_freshness(_client(ctx, domain), domain)
 
 
-@mcp.tool()
-def search_knowledge_base(query: str, top_k: int = 3) -> KnowledgeSearchResult:
-    """Search internal policies, playbooks, and reporting standards for
-    context relevant to a question - e.g. 'why do we cap lookalike
-    expansion?' or 'what should I check before escalating a CTR drop?'.
-    Use this ALONGSIDE the numeric tools when a question needs both data
-    and institutional knowledge to answer well.
-
-    Args:
-        query: the natural-language question or topic to search for.
-        top_k: how many relevant document chunks to return.
-    """
-    chunks = _kb.query(query, n_results=top_k)
-    return KnowledgeSearchResult(
-        found=bool(chunks),
-        results=[KnowledgeChunk(source=c.source, similarity=round(c.similarity, 3), text=c.text)
-                 for c in chunks],
-    )
+@_tool()
+def calculate_kpi(domain: str, metric: str, days: int = 30,
+                   entity_type: str | None = None, entity_id: int | None = None, *, ctx: Context) -> KpiResult:
+    """Get a single metric's total value over a period, optionally scoped
+    to one entity. This is the general-purpose KPI lookup - use it for any
+    single-number question."""
+    return ct.calculate_kpi(_client(ctx, domain), domain, metric, days, entity_type, entity_id)
 
 
-@mcp.tool()
-def ingest_knowledge_docs(documents: list[dict], max_chunk_size: int = 500) -> IngestResult:
-    """Add new policy/playbook/reporting documents to the knowledge base
-    so they become searchable via search_knowledge_base.
+@_tool()
+def compare_periods(domain: str, metric: str, days: int = 14,
+                     entity_type: str | None = None, entity_id: int | None = None, *, ctx: Context) -> PeriodComparison:
+    """Compare the last N days to the N days before that - two clean,
+    non-overlapping windows. Use for 'how does this week compare to last
+    week' style questions."""
+    return ct.compare_periods(_client(ctx, domain), domain, metric, days, entity_type, entity_id)
 
-    Args:
-        documents: list of {"source": str, "text": str} dicts.
-        max_chunk_size: max characters per chunk.
-    """
-    chunk_ids, chunk_texts, chunk_sources = [], [], []
-    for doc_index, doc in enumerate(documents):
-        for chunk in recursive_chunk(doc["text"], max_chunk_size=max_chunk_size):
-            chunk_ids.append(f"{doc['source']}_{doc_index}_{chunk.chunk_index}")
-            chunk_texts.append(chunk.text)
-            chunk_sources.append(doc["source"])
-    _kb.add(ids=chunk_ids, documents=chunk_texts, sources=chunk_sources)
-    return IngestResult(documents_ingested=len(documents), chunks_created=len(chunk_ids))
+
+@_tool()
+def rank_entities(domain: str, metric: str, entity_type: str, days: int = 30,
+                   limit: int = 10, ascending: bool = False,
+                   min_volume_metric: str | None = None, *, ctx: Context) -> RankingResult:
+    """Rank entities by a metric - top performers (ascending=False) or
+    worst/underperformers (ascending=True). Pass min_volume_metric (e.g.
+    'impressions') to also see the volume behind each rank, so a high rate
+    on trivial volume isn't mistaken for a meaningful result."""
+    return ct.rank_entities(_client(ctx, domain), domain, metric, entity_type, days, limit,
+                             ascending, min_volume_metric)
+
+
+@_tool()
+def analyze_trend(domain: str, metric: str, days: int = 30,
+                   entity_type: str | None = None, entity_id: int | None = None, *, ctx: Context) -> TrendSummary:
+    """Determine whether a metric is trending up, down, or stable over
+    time, comparing the first half to the second half of the window."""
+    return ct.analyze_trend(_client(ctx, domain), domain, metric, days, entity_type, entity_id)
+
+
+@_tool()
+def detect_anomalies(domain: str, metric: str, days: int = 30,
+                      entity_type: str | None = None, entity_id: int | None = None,
+                      sensitivity: str = "normal", *, ctx: Context) -> AnomalyReport:
+    """Find days where a metric deviated unusually from its recent
+    baseline. sensitivity='normal' (recommended) only flags genuinely
+    unusual days; 'high' also catches minor blips."""
+    return ct.detect_anomalies(_client(ctx, domain), domain, metric, days, entity_type, entity_id, sensitivity)
+
+
+@_tool()
+def explain_metric_change(domain: str, metric: str, days: int = 14,
+                           entity_type: str | None = None, entity_id: int | None = None,
+                           top_n: int = 5, *, ctx: Context) -> MetricChangeExplanation:
+    """Root-cause a metric change: compares the current period to the
+    previous one, then breaks it down by the natural child dimension
+    (e.g. campaigns within a client) to find which specific entities drove
+    the change - ranked by absolute impact, not percentage, to avoid being
+    misled by a huge swing on trivial volume. This is usually the right
+    first tool for 'why did X change' questions."""
+    return ct.explain_metric_change(_client(ctx, domain), domain, metric, days, entity_type, entity_id, top_n)
+
+
+@_tool()
+def search_knowledge_base(query: str, top_k: int = 3) -> dict:
+    """Search internal policies and playbooks for context a data query
+    alone can't answer - e.g. 'what should I check before escalating a
+    timeout spike'. Combine with a data tool when a question needs both."""
+    return ct.search_knowledge_base(_kb, query, top_k)
+
+
+# ---------------------------------------------------------------------
+# Domain tools (8) - only loaded in their matching mode
+# ---------------------------------------------------------------------
+@_tool()
+def generate_revive_report(entity_type: str, entity_id: int, days: int = 30, *, ctx: Context) -> DomainReport:
+    """[Revive mode] Full picture for a zone, banner, campaign, client,
+    affiliate or manager in one call:
+    requests/impressions/fill rate/CTR/CVR/revenue/margin/eCPM, plus
+    fill-rate trend and anomalies. Use for broad 'how is this doing' questions."""
+    return rp.generate_revive_report(_client(ctx, REVIVE), entity_type, entity_id, days)
+
+
+@_tool()
+def generate_exchange_report(entity_type: str, entity_id: int, days: int = 30) -> DomainReport:
+    """[Exchange mode] Full picture for a supply_partner, ad_unit,
+    demand_partner, or dsp_campaign in one call: bid funnel, win rate,
+    timeout rate, eCPM, latency, plus win-rate trend and anomalies."""
+    return rp.generate_exchange_report(_analytics, entity_type, entity_id, days)
+
+
+@_tool()
+def get_realtime_exchange_health(minutes: int = 15, ad_unit_id: int | None = None,
+                                  demand_partner_id: int | None = None) -> RealtimeExchangeHealth:
+    """[Exchange mode] Live operational snapshot (QPS, bid rate, timeout
+    rate, latency) from the last few minutes of raw auction data. Use for
+    'what's happening right now' questions; use analyze_trend/calculate_kpi
+    for anything beyond a few hours."""
+    return rt.get_realtime_exchange_health(_analytics, minutes, ad_unit_id, demand_partner_id)
+
+@_tool()
+def get_banner_zone_mapping(banner_id: int | None = None, zone_id: int | None = None,
+                             days: int = 30, *, ctx: Context) -> BannerZoneMapping:
+    """[Revive mode] Which zones a banner runs in, or which banners run in a zone.
+    Provide banner_id OR zone_id to scope to one entity (use list_entities first
+    to resolve a name to an ID). To answer a question about the FULL mapping
+    across every banner/zone, call this ONCE with neither ID set - it returns
+    the top pairs account-wide by impression volume - rather than calling it
+    once per banner or zone."""
+    return _get_banner_zone_mapping(_client(ctx, REVIVE), banner_id, zone_id, days)
+
+@_tool()
+def get_supply_demand_cross_analysis(metric: str = "win_rate", supply_partner_id: int | None = None,
+                                      demand_partner_id: int | None = None,
+                                      days: int = 30) -> SupplyDemandCrossAnalysis:
+    """[Exchange mode] Cross-tab a metric by both supply and demand partner.
+    Provide exactly one ID to hold that side fixed and see it vary across the other."""
+    return _get_supply_demand_cross(_analytics, metric, supply_partner_id, demand_partner_id, days)
+
+@_tool()
+def inspect_revive_object(object_type: str, object_id: int, *, ctx: Context) -> InspectResult:
+    """[Revive mode] Configuration of ONE object and what it's linked to -
+    use for setup questions, not performance. object_type is one of:
+    campaign (dates, priority, weight, booked vs delivered, pricing, caps,
+    banners, linked zones), banner (size, click URL, caps, linked zones,
+    targeting rules), zone (size, website, payout, linked banners and
+    campaigns, last-7-day requests), affiliate (website: zones, users with
+    access), client (campaigns, users with access), manager (advertisers,
+    websites, users), user (accounts, last login). Use list_entities first
+    to resolve a name to an ID."""
+    return ra.inspect_revive_object(_client(ctx, REVIVE), object_type, object_id)
+
+
+@_tool()
+def run_revive_check(check_name: str, days: int | None = None, hours: int | None = None,
+                     threshold_pct: int | None = None, min_requests: int | None = None, *, ctx: Context) -> CheckResult | CheckOverview:
+    """[Revive mode] Find setup problems across the whole ad server. check_name:
+    'all' (count of problems per check - start here for 'what's wrong?'),
+    campaigns_expiring (days=7), campaigns_behind_pace (threshold_pct=90),
+    active_no_delivery (hours=24), campaigns_not_running, unlinked_zones,
+    size_mismatch, zero_fill_zones (days=7, min_requests=1000),
+    inactive_users (days=90). Only pass the parameters a check lists;
+    leave them out to use its defaults. Each result states its rule."""
+    return ra.run_revive_check(_client(ctx, REVIVE), check_name, days=days, hours=hours,
+                               threshold_pct=threshold_pct, min_requests=min_requests)
+
+
+@_tool()
+def get_revive_audit_log(object_type: str | None = None, object_id: int | None = None,
+                         username: str | None = None, action: str | None = None,
+                         days: int = 7, *, ctx: Context) -> AuditLogResult:
+    """[Revive mode] Who changed what, and when - newest first, each change
+    shown as field: was -> now. Filter by object (object_type: campaign,
+    banner, zone, client, affiliate, manager, user + object_id; a banner or
+    zone also includes its link and targeting changes), by username, and by
+    action ('created', 'changed', 'deleted'). When explaining why a metric
+    moved, check this for the same entity around the date of the change."""
+    return ra.get_revive_audit_log(_client(ctx, REVIVE), object_type, object_id, username, action, days)
 
 
 if __name__ == "__main__":
