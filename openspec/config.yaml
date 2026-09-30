@@ -1,0 +1,43 @@
+schema: spec-driven
+
+context: |
+  Product: AI Analytics Copilot - a standalone web app for conversational AdTech analytics. It is NOT a Revive
+    plugin and must not be packaged as one; it reads Revive's database from outside. Single-tenant: one instance
+    per customer, on-prem or in their own cloud. Git remote: kartikdjax/AdOpsCopilot (the user pushes; the
+    sandbox can't reach GitHub).
+  Stack: Python 3.10, FastAPI + uvicorn (src/api/), plain HTML/JS/CSS UI (static/), MCP Python SDK v2
+    (mcp.server.mcpserver.MCPServer; client mcp.Client in-process), pydantic v2 + pydantic-settings (src/config.py,
+    values from .env), SQLAlchemy + pymysql for MySQL, clickhouse-connect, pandas/numpy, Chroma +
+    sentence-transformers for RAG. LLM providers: Groq (default, model fallback chain) or Anthropic, chosen by
+    LLM_PROVIDER (src/provider_factory.py, src/llm_providers/).
+  Architecture:
+    - src/api/main.py runs the MCP server (src/mcp_server.py) in-process and calls src/orchestrator.py per /chat.
+    - The orchestrator is the LLM tool-use loop. A conversation has a mode, "revive" or "exchange"; the LLM sees
+      only the 11 core tools plus that mode's tools (TOOL_DOMAIN in src/semantic/tool_domains.py).
+    - src/semantic/ is the semantic layer: metric registry per domain, query builders (ClickHouse and MySQL), core
+      tools, Revive admin tools (checks, inspect, audit log, system status), exchange tools. The LLM supplies typed
+      parameters only; SQL is built in code with bound parameters.
+    - Revive mode reads a Revive Adserver 6.0.x MySQL database (local: revive608, table prefix rv_ hard-coded).
+      Exchange mode reads ClickHouse database adexchange (docker-compose.yml).
+    - Users, sessions and chat history live in SQLite (data/copilot.db, COPILOT_DB_PATH overrides). Roles:
+      pending (default at sign-up), manager (limited to one Revive manager, rv_agency.agencyid), admin. Roles are
+      granted only from the server CLI (python -m src.api.manage_users), never over the web.
+    - A user's scope travels to MCP tools as request metadata (src/semantic/access.py), never as a tool argument.
+      Revive tools fail closed without it.
+  Data: all data is synthetic. Generators plant known scenarios and problems (src/revive_data/admin_fixtures.py
+    PLANTED, zone/partner/campaign scenarios) that tests assert on. Planted Revive problems are relative to load
+    time. load_revive_data only writes to a database claimed with --claim and holding only generator rows
+    (src/revive_data/load_guard.py). Never point it at /var/www/html/opensepc_revive's database (opensepc_revive),
+    which holds the Revive plugin project's fixtures.
+  Tests (pytest.ini): tests/unit/ need no databases (fake clients, in-memory SQLite); tests/live/ need revive608
+    loaded within 24h plus ClickHouse, and skip with a reason otherwise. evals/revive_scenarios.py runs the real LLM
+    and is a signal, not a gate. Verify a change with: .venv/bin/pytest (and reload revive608 first for live tests).
+  Conventions: match the surrounding code's style (from __future__ import annotations, type hints, short docstrings
+    that say why). Keep tool results bounded (MAX_ROWS, MAX_TOOL_RESULT_CHARS). Expected tool errors raise
+    ValueError / PermissionError so the LLM sees the message.
+
+rules:
+  specs:
+    - Scenarios must be checkable by a test in tests/unit or tests/live; name LLM-dependent behaviour as an eval, not a requirement.
+  tasks:
+    - Every task that changes behaviour includes the pytest test that proves it.
