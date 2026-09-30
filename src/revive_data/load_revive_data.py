@@ -4,11 +4,15 @@ Adserver MySQL database (revive608), replacing the earlier ClickHouse
 mirror for the revive domain.
 
 Run: python -m src.revive_data.load_revive_data --days 30
+
+The loader refuses any database that isn't marked as a Copilot synthetic
+one (see load_guard.py). Mark a database once with --claim <database>.
 """
 from __future__ import annotations
 
 import argparse
 import logging
+import sys
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
@@ -16,6 +20,7 @@ from sqlalchemy.engine import URL
 from src.config import get_settings
 from src.revive_data.admin_fixtures import SYNTHETIC_ID_START
 from src.revive_data.generate_revive_data import SYNTHETIC_MANAGER_START, generate_revive_dataset
+from src.revive_data.load_guard import UnsafeDatabaseError, claim, ensure_safe_to_load
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,13 +39,26 @@ _AUDIT_TABLE = "rv_audit"
 _FACT_TABLE = "rv_data_summary_ad_hourly"
 
 
-def load_dataset(host: str, port: int, database: str, username: str, password: str,
-                  days: int) -> None:
+def _engine(host: str, port: int, database: str, username: str, password: str):
     # URL.create (not an f-string) because the password can contain characters
     # like "@" that would otherwise be misparsed as the userinfo/host separator.
-    engine = create_engine(URL.create(
+    return create_engine(URL.create(
         "mysql+pymysql", username=username, password=password, host=host, port=port, database=database,
     ))
+
+
+def claim_database(host: str, port: int, database: str, username: str, password: str,
+                   confirm: str) -> None:
+    with _engine(host, port, database, username, password).begin() as conn:
+        claim(conn, database, confirm)
+    logger.info("%s is marked as a Copilot synthetic database.", database)
+
+
+def load_dataset(host: str, port: int, database: str, username: str, password: str,
+                  days: int) -> None:
+    engine = _engine(host, port, database, username, password)
+    with engine.connect() as conn:
+        ensure_safe_to_load(conn, database)
 
     logger.info("Generating Revive-schema dataset: days=%d", days)
     data = generate_revive_dataset(total_days=days)
@@ -82,6 +100,14 @@ if __name__ == "__main__":
     parser.add_argument("--username", default=settings.mysql_username)
     parser.add_argument("--password", default=settings.mysql_password)
     parser.add_argument("--days", type=int, default=30)
+    parser.add_argument("--claim", metavar="DATABASE",
+                        help="mark DATABASE (must equal the target) as synthetic, then load into it")
     args = parser.parse_args()
 
-    load_dataset(args.host, args.port, args.database, args.username, args.password, args.days)
+    try:
+        if args.claim is not None:
+            claim_database(args.host, args.port, args.database, args.username, args.password, args.claim)
+        load_dataset(args.host, args.port, args.database, args.username, args.password, args.days)
+    except UnsafeDatabaseError as e:
+        logger.error("Refusing to load: %s", e)
+        sys.exit(1)
