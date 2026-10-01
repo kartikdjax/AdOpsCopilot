@@ -35,9 +35,17 @@ def test_host_network_and_no_published_ports(compose):
 
 def test_api_is_local_only_with_two_workers(compose):
     command = " ".join(compose["services"]["api"]["command"])
+    assert "exec AdOps-Copilot -m uvicorn" in command  # shows as AdOps-Copilot in netstat/ps
     assert "--host 127.0.0.1" in command
     assert "--workers 2" in command
     assert "--proxy-headers" in command and "--forwarded-allow-ips 127.0.0.1" in command
+
+
+def test_processes_are_named(compose):
+    assert compose["services"]["scheduler"]["command"][0] == "AdOps-Scheduler"
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    for name in ("AdOps-Copilot", "AdOps-Scheduler"):
+        assert f"ln -s /usr/local/bin/python3.10 /usr/local/bin/{name}" in dockerfile
 
 
 def test_no_database_containers(compose):

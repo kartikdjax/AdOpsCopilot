@@ -91,6 +91,9 @@ Run from the repo root on the server.
   02:30 UTC. For about 30 seconds during the daily reload, answers can see
   partial data.
 - **Logs:** `docker compose -f deploy/docker-compose.yml logs -f api scheduler`
+- **Processes:** the API shows as `AdOps-Copilot` (on `127.0.0.1:8000` in
+  `sudo netstat -tlnp`) and the scheduler as `AdOps-Scheduler` in `ps`. There's
+  no `docker-proxy`: host networking publishes no ports.
 - **Update to a new version:** `git pull`, then `build` and `up -d` again.
   Users, sessions, chat history and the knowledge base live in the
   `copilot_data` volume and survive rebuilds.

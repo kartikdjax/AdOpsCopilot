@@ -22,7 +22,7 @@ services:
   api:
     <<: *app
     # $$ defers ${COPILOT_PORT} to the container's shell, which gets it from .env.
-    command: ["sh", "-c", "exec uvicorn src.api.main:app --host 127.0.0.1 --port $${COPILOT_PORT:-8000} --workers 2 --proxy-headers --forwarded-allow-ips 127.0.0.1"]
+    command: ["sh", "-c", "exec AdOps-Copilot -m uvicorn src.api.main:app --host 127.0.0.1 --port $${COPILOT_PORT:-8000} --workers 2 --proxy-headers --forwarded-allow-ips 127.0.0.1"]
     healthcheck:
       test: ["CMD", "sh", "-c", "python -c \"import urllib.request, os; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('COPILOT_PORT', '8000') + '/health', timeout=5)\""]
       interval: 30s
@@ -32,7 +32,7 @@ services:
 
   scheduler:
     <<: *app
-    command: ["python", "-m", "src.deploy.scheduler"]
+    command: ["AdOps-Scheduler", "-m", "src.deploy.scheduler"]
 
   setup:
     <<: *app
