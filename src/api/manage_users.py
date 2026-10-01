@@ -1,5 +1,5 @@
 """
-Grant Copilot access. Run on the server - there is deliberately no web
+Grant AdOps Copilot access. Run on the server - there is deliberately no web
 endpoint for this, so a compromised session can't promote itself.
 
   python -m src.api.manage_users list
@@ -77,7 +77,7 @@ def add_user(email: str, display_name: str, role: str, agency_id: int | None) ->
     db = get_db()
     try:
         if db.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
-            sys.exit(f"A Copilot user with email {email!r} already exists; use set-role to change it.")
+            sys.exit(f"An AdOps Copilot user with email {email!r} already exists; use set-role to change it.")
         db.execute("INSERT INTO users(id,email,display_name,password_hash,created_at,role,agency_id) "
                    "VALUES(?,?,?,?,?,?,?)",
                    (secrets.token_hex(16), email, display_name.strip(), _hash_password(password),
@@ -100,12 +100,12 @@ def set_role(email: str, role: str, agency_id: int | None) -> None:
     finally:
         db.close()
     if cursor.rowcount == 0:
-        sys.exit(f"No Copilot user with email {email!r} - create it with: add {email} --name ... --role ...")
+        sys.exit(f"No AdOps Copilot user with email {email!r} - create it with: add {email} --name ... --role ...")
     print(f"{email}: role={role}" + (f", agency_id={agency_id}" if agency_id is not None else ""))
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Manage Copilot user accounts and roles.")
+    parser = argparse.ArgumentParser(description="Manage AdOps Copilot user accounts and roles.")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="Show every user and their role")
     add_parser = sub.add_parser("add", help="Create an account with a generated password")

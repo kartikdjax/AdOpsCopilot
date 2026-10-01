@@ -1,4 +1,4 @@
-// AI Analytics Copilot - frontend. No framework, no build step - deliberately,
+// AdOps Copilot - frontend. No framework, no build step - deliberately,
 // so a customer can deploy this by running the Python backend alone, nothing
 // else to install.
 
@@ -90,7 +90,7 @@ function applyAccessState() {
   chatInput.disabled = blocked;
   sendBtn.disabled = blocked;
   chatInput.placeholder = blocked
-    ? "Revive access needed - ask a Copilot admin to grant it"
+    ? "Revive access needed - ask an AdOps Copilot admin to grant it"
     : MODE_META[currentMode].placeholder;
 }
 
@@ -235,7 +235,7 @@ function renderWelcome() {
       <h2>${meta.heading}</h2>
       <div class="access-notice">
         <strong>Your account doesn't have Revive access yet.</strong>
-        <span>Ask a Copilot admin to grant you the admin or manager role. You can use Exchange in the meantime.</span>
+        <span>Ask an AdOps Copilot admin to grant you the admin or manager role. You can use Exchange in the meantime.</span>
       </div>`;
     chatLog.appendChild(welcome);
     return;
@@ -621,7 +621,7 @@ signinForm.addEventListener("submit", async (e) => {
   const me = await api("auth/me");
   if (!me.ok) {
     showAuthError("Your password was accepted, but your browser didn't keep the session. " +
-                  "Open the Copilot at its usual address and sign in again.");
+                  "Open AdOps Copilot at its usual address and sign in again.");
     return;
   }
   const { user } = await me.json();

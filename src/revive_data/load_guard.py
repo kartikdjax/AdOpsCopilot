@@ -97,4 +97,4 @@ def claim(conn: Connection, database: str, confirm: str) -> None:
     conn.execute(text(f"CREATE TABLE {MARKER_TABLE} (claimed_at VARCHAR(32) NOT NULL, note VARCHAR(255) NOT NULL)"))
     conn.execute(text(f"INSERT INTO {MARKER_TABLE} (claimed_at, note) VALUES (:at, :note)"),
                  {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                  "note": "Synthetic data owned by AI Analytics Copilot; load_revive_data may replace it."})
+                  "note": "Synthetic data owned by AdOps Copilot; load_revive_data may replace it."})

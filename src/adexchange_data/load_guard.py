@@ -53,7 +53,7 @@ def mark(client: Any, database: str) -> None:
                    f"(claimed_at DateTime, note String) ENGINE = TinyLog")
     client.command(f"INSERT INTO {db}.{MARKER_TABLE} VALUES "
                    f"('{datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S}', "
-                   f"'Synthetic data owned by AI Analytics Copilot; the exchange loaders may replace it.')")
+                   f"'Synthetic data owned by AdOps Copilot; the exchange loaders may replace it.')")
 
 
 def claim(client: Any, database: str, confirm: str) -> None:

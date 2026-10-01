@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  Product: AI Analytics Copilot - a standalone web app for conversational AdTech analytics. It is NOT a Revive
+  Product: AdOps Copilot (renamed from "AI Analytics Copilot"; never "Copilot" alone, to avoid confusion with Microsoft Copilot) - a standalone web app for conversational AdTech analytics. It is NOT a Revive
     plugin and must not be packaged as one; it reads Revive's database from outside. Single-tenant: one instance
     per customer, on-prem or in their own cloud. Git remote: kartikdjax/AdOpsCopilot (the user pushes; the
     sandbox can't reach GitHub).

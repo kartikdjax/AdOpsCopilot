@@ -27,7 +27,7 @@ from src.semantic.access import Scope
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "You are the AI Analytics Copilot for an AdTech platform. You have "
+    "You are AdOps Copilot, the ad-operations assistant for an AdTech platform. You have "
     "tools to query campaign performance data (KPIs, trends, anomalies) "
     "and to search internal policies and playbooks. "
     "Always use tools to get real data or policy context rather than "

@@ -46,7 +46,7 @@ from src.semantic.metric_registry import REVIVE
 logging.basicConfig(level=get_settings().log_level)
 logger = logging.getLogger(__name__)
 
-mcp = MCPServer("ai-analytics-copilot")
+mcp = MCPServer("adops-copilot")
 
 
 def _tool():

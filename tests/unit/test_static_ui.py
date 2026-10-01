@@ -29,3 +29,15 @@ def test_sign_in_requires_a_working_session():
     assert 'api("auth/me")' in handler
     assert "me.ok ? me : resp" not in handler  # never fall back to the sign-in response
     assert "if (!me.ok)" in handler and "showAuthError" in handler.split("if (!me.ok)")[1]
+
+
+def test_product_name_is_adops_copilot():
+    """Never "AI Analytics Copilot" or a bare "Copilot" heading (reads as Microsoft Copilot)."""
+    html = (STATIC / "index.html").read_text()
+    assert "<title>AdOps Copilot</title>" in html
+    assert "<h1>Copilot</h1>" not in html
+    root = STATIC.parent
+    user_facing = [STATIC / "index.html", STATIC / "app.js", root / "src" / "orchestrator.py",
+                   root / "src" / "api" / "main.py", root / "src" / "api" / "tour.py"]
+    for path in user_facing:
+        assert "AI Analytics Copilot" not in path.read_text(), path

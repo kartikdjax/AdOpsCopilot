@@ -1,4 +1,4 @@
-# AI Analytics Copilot
+# AdOps Copilot
 
 Conversational analytics for AdTech data: natural-language Q&A, KPI
 summaries, trend analysis, anomaly explanations, health checks and

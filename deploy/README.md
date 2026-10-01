@@ -1,4 +1,4 @@
-# Deploying the Copilot
+# Deploying AdOps Copilot
 
 The Copilot runs as two containers on the server: the API (2 workers) and a
 scheduler that keeps the synthetic data current. It reuses the server's own

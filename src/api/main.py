@@ -1,4 +1,4 @@
-"""FastAPI backend for the AI Analytics Copilot."""
+"""FastAPI backend for AdOps Copilot."""
 from __future__ import annotations
 
 import logging
@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
     app_state.clear()
 
 _docs = get_settings().enable_api_docs  # off by default: the deployment is public
-app = FastAPI(title="AI Analytics Copilot", lifespan=lifespan, docs_url="/docs" if _docs else None,
+app = FastAPI(title="AdOps Copilot", lifespan=lifespan, docs_url="/docs" if _docs else None,
               redoc_url="/redoc" if _docs else None, openapi_url="/openapi.json" if _docs else None)
 app.include_router(auth_router)
 app.include_router(history_router)
@@ -63,7 +63,7 @@ async def chat(request: ChatRequest, user=Depends(get_current_user)) -> ChatResp
     scope = user_scope(user)
     if request.mode == "revive" and scope is None:
         raise HTTPException(status_code=403, detail=(
-            "Your account doesn't have Revive access yet. Ask a Copilot admin to grant you "
+            "Your account doesn't have Revive access yet. Ask an AdOps Copilot admin to grant you "
             "the admin or manager role."))
     db = get_db()
     try:
