@@ -122,6 +122,8 @@ function setActiveSessionId(mode, id) {
 }
 
 // --- Fetch helper --------------------------------------------------------
+// Paths are relative ("chat", not "/chat") so the app also works when a proxy
+// serves it under a prefix such as /copilot/.
 async function api(path, options = {}) {
   const resp = await fetch(path, {
     credentials: "same-origin",
@@ -321,7 +323,7 @@ function formatTimestamp(iso) {
 }
 
 async function refreshHistory() {
-  const resp = await api("/history");
+  const resp = await api("history");
   if (!resp.ok) return [];
   const { chats } = await resp.json();
   historyList.innerHTML = "";
@@ -353,7 +355,7 @@ async function loadChat(chatId, mode) {
   if (mode !== currentMode) setMode(mode, { skipSessionSwap: true });
   setActiveSessionId(mode, chatId);
   setPanel("chats");
-  const resp = await api(`/history/${chatId}`);
+  const resp = await api(`history/${chatId}`);
   if (!resp.ok) {
     renderWelcome();
   } else {
@@ -363,7 +365,7 @@ async function loadChat(chatId, mode) {
 }
 
 async function deleteChat(chatId, mode) {
-  await api(`/history/${chatId}`, { method: "DELETE" }).catch(() => {});
+  await api(`history/${chatId}`, { method: "DELETE" }).catch(() => {});
   if (chatId === currentChatId) {
     startNewChat(mode, { silent: true });
   }
@@ -396,7 +398,7 @@ function setMode(mode, { skipSessionSwap = false } = {}) {
 async function loadActiveChatOrWelcome(mode) {
   const id = getOrCreateSessionId(mode);
   currentChatId = id;
-  const resp = await api(`/history/${id}`);
+  const resp = await api(`history/${id}`);
   if (resp.ok) {
     renderChatMessages(await resp.json());
   } else {
@@ -438,7 +440,7 @@ async function sendMessage(text) {
   appendTypingIndicator();
 
   try {
-    const resp = await api("/chat", {
+    const resp = await api("chat", {
       method: "POST",
       body: JSON.stringify({ session_id: currentChatId, message: text, mode: currentMode }),
     });
@@ -492,7 +494,7 @@ let toolsLoaded = false;
 async function loadToolsPanel() {
   const toolsList = document.getElementById("tools-list");
   if (toolsLoaded) return;
-  const resp = await api("/mcp/tools");
+  const resp = await api("mcp/tools");
   if (!resp.ok) {
     toolsList.innerHTML = `<div class="loading">Could not load tools.</div>`;
     return;
@@ -544,7 +546,7 @@ let tourSteps = [];
 async function loadTourPanel() {
   const el = document.getElementById("tour-content");
   if (tourSteps.length === 0) {
-    const resp = await api("/tour");
+    const resp = await api("tour");
     if (!resp.ok) {
       el.innerHTML = `<div class="loading">Could not load the tour.</div>`;
       return;
@@ -606,20 +608,28 @@ signinForm.addEventListener("submit", async (e) => {
   authError.hidden = true;
   const email = document.getElementById("signin-email").value;
   const password = document.getElementById("signin-password").value;
-  const resp = await api("/auth/signin", { method: "POST", body: JSON.stringify({ email, password }) });
+  const resp = await api("auth/signin", { method: "POST", body: JSON.stringify({ email, password }) });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: "Sign in failed" }));
     showAuthError(err.detail || "Sign in failed");
     return;
   }
-  // /auth/me carries the manager's name as well as the role.
-  const me = await api("/auth/me");
-  const { user } = await (me.ok ? me : resp).json();
+  // /auth/me carries the manager's name as well as the role. It also proves
+  // the browser kept the session cookie: if it didn't (for example the app was
+  // opened at an address its cookie doesn't cover), every later request would
+  // fail with "Sign in required", so say so now instead of showing the app.
+  const me = await api("auth/me");
+  if (!me.ok) {
+    showAuthError("Your password was accepted, but your browser didn't keep the session. " +
+                  "Open the Copilot at its usual address and sign in again.");
+    return;
+  }
+  const { user } = await me.json();
   onAuthenticated(user);
 });
 
 document.getElementById("signout-btn").addEventListener("click", async () => {
-  await api("/auth/signout", { method: "POST" }).catch(() => {});
+  await api("auth/signout", { method: "POST" }).catch(() => {});
   currentUser = null;
   appEl.hidden = true;
   authScreen.hidden = false;
@@ -641,7 +651,7 @@ function onAuthenticated(user) {
 
 // --- Boot --------------------------------------------------------------------
 (async function init() {
-  const resp = await api("/auth/me");
+  const resp = await api("auth/me");
   if (resp.ok) {
     const { user } = await resp.json();
     onAuthenticated(user);

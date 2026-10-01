@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     mysql_database: str = "revive608"
     mysql_username: str = "root"
     mysql_password: str = ""  # set MYSQL_PASSWORD in .env
+    # Separate MySQL user for the data loaders (setup, refresh), limited to the
+    # Copilot's own database. Empty = use mysql_username/password, as locally.
+    mysql_loader_username: str = ""
+    mysql_loader_password: str = ""
 
     # LLM provider selection - "groq" (free, default) or "anthropic"
     llm_provider: str = "groq"
@@ -43,7 +47,18 @@ class Settings(BaseSettings):
     chroma_persist_dir: str = "./data/chroma"
     embedding_model_name: str = "all-MiniLM-L6-v2"
 
+    # Web / deployment
+    allow_signup: bool = False     # the UI has no sign-up form; accounts come from manage_users
+    cookie_secure: bool = False    # true behind HTTPS
+    enable_api_docs: bool = False  # /docs, /redoc, /openapi.json
+
     log_level: str = "INFO"
+
+    @property
+    def loader_mysql_credentials(self) -> tuple[str, str]:
+        if self.mysql_loader_username:
+            return self.mysql_loader_username, self.mysql_loader_password
+        return self.mysql_username, self.mysql_password
 
 
 @lru_cache

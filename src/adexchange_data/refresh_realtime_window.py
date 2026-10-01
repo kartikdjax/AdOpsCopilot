@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 
 import clickhouse_connect
 
@@ -25,6 +26,8 @@ from src.adexchange_data.generate_adexchange_data import (
     generate_ad_units, generate_campaigns, generate_demand_partners,
     generate_raw_recent_window, generate_supply_partners,
 )
+from src.adexchange_data.load_guard import UnsafeDatabaseError, ensure_safe_to_load
+from src.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,6 +40,11 @@ def refresh(host: str, port: int, database: str, username: str, password: str,
     client = clickhouse_connect.get_client(
         host=host, port=port, database=database, username=username, password=password,
     )
+    refresh_into(client, database, raw_hours, seed)
+
+
+def refresh_into(client, database: str, raw_hours: int, seed: int) -> None:
+    ensure_safe_to_load(client, database)
 
     supply_partners = generate_supply_partners(seed=seed)
     ad_units = generate_ad_units(supply_partners, seed=seed)
@@ -62,16 +70,21 @@ def refresh(host: str, port: int, database: str, username: str, password: str,
 
 
 if __name__ == "__main__":
+    settings = get_settings()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="localhost")
-    parser.add_argument("--port", type=int, default=8123)
+    parser.add_argument("--host", default=settings.clickhouse_host)
+    parser.add_argument("--port", type=int, default=settings.clickhouse_port)
     parser.add_argument("--database", default="adexchange")
-    parser.add_argument("--username", default="default")
-    parser.add_argument("--password", default="dev_local_password")
+    parser.add_argument("--username", default=settings.clickhouse_username)
+    parser.add_argument("--password", default=settings.clickhouse_password)
     parser.add_argument("--raw-hours", type=int, default=3)
     parser.add_argument("--seed", type=int, default=11,
                          help="Must match the seed used when the dimension tables were loaded")
     args = parser.parse_args()
 
-    refresh(args.host, args.port, args.database, args.username, args.password,
-            args.raw_hours, args.seed)
+    try:
+        refresh(args.host, args.port, args.database, args.username, args.password,
+                args.raw_hours, args.seed)
+    except UnsafeDatabaseError as e:
+        logger.error("Refusing to refresh: %s", e)
+        sys.exit(1)

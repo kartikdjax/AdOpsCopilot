@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(os.getenv("COPILOT_DB_PATH", "data/copilot.db"))
+BUSY_TIMEOUT_MS = 10_000
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -47,8 +48,13 @@ _USER_COLUMNS = {
 
 def get_db() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(DB_PATH)
+    # Several uvicorn workers share this file: WAL lets readers and a writer
+    # overlap, and the busy timeout makes a writer wait instead of failing
+    # with "database is locked".
+    db = sqlite3.connect(DB_PATH, timeout=BUSY_TIMEOUT_MS / 1000)
     db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode = WAL")
+    db.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(SCHEMA)
     existing = {row["name"] for row in db.execute("PRAGMA table_info(users)")}

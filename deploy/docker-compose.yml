@@ -1,0 +1,44 @@
+# Server deployment. Run from the repo root:
+#   docker compose -f deploy/docker-compose.yml build
+#   docker compose -f deploy/docker-compose.yml run --rm setup     # first time: create + load data
+#   docker compose -f deploy/docker-compose.yml up -d              # api + scheduler
+# Settings and secrets come from deploy/.env (copy deploy/.env.example; git-ignored).
+# Host networking: the containers reach the server's MySQL and ClickHouse on
+# 127.0.0.1, and the API listens on 127.0.0.1 only - the host's nginx/Apache is
+# the only way in. No ports are published.
+name: ai-analytics-copilot-deploy   # distinct from the dev compose project in the repo root
+
+x-app: &app
+  image: ai-analytics-copilot:latest
+  build:
+    context: ..
+  network_mode: host
+  env_file: .env
+  volumes:
+    - copilot_data:/app/data   # SQLite users/sessions/history + Chroma knowledge base
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *app
+    # $$ defers ${COPILOT_PORT} to the container's shell, which gets it from .env.
+    command: ["sh", "-c", "exec uvicorn src.api.main:app --host 127.0.0.1 --port $${COPILOT_PORT:-8000} --workers 2 --proxy-headers --forwarded-allow-ips 127.0.0.1"]
+    healthcheck:
+      test: ["CMD", "sh", "-c", "python -c \"import urllib.request, os; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('COPILOT_PORT', '8000') + '/health', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+  scheduler:
+    <<: *app
+    command: ["python", "-m", "src.deploy.scheduler"]
+
+  setup:
+    <<: *app
+    profiles: ["setup"]     # only runs on request: docker compose ... run --rm setup
+    restart: "no"
+    command: ["python", "-m", "src.deploy.setup"]
+
+volumes:
+  copilot_data:

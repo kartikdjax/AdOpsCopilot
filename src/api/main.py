@@ -47,7 +47,9 @@ async def lifespan(app: FastAPI):
         yield
     app_state.clear()
 
-app = FastAPI(title="AI Analytics Copilot", lifespan=lifespan)
+_docs = get_settings().enable_api_docs  # off by default: the deployment is public
+app = FastAPI(title="AI Analytics Copilot", lifespan=lifespan, docs_url="/docs" if _docs else None,
+              redoc_url="/redoc" if _docs else None, openapi_url="/openapi.json" if _docs else None)
 app.include_router(auth_router)
 app.include_router(history_router)
 app.include_router(mcp_router)

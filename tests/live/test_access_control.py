@@ -104,7 +104,18 @@ async def test_mcp_server_takes_scope_from_metadata_only(admin):
         assert not metrics.is_error  # definitions hold no data and need no scope
 
 
-def test_api_keeps_pending_users_out_of_revive(admin):
+@pytest.fixture
+def signup_enabled(monkeypatch):
+    from src.config import get_settings
+
+    monkeypatch.setenv("ALLOW_SIGNUP", "true")  # sign-up is off by default
+    get_settings.cache_clear()
+    yield
+    monkeypatch.delenv("ALLOW_SIGNUP")
+    get_settings.cache_clear()
+
+
+def test_api_keeps_pending_users_out_of_revive(admin, signup_enabled):
     from fastapi.testclient import TestClient
 
     from src.api.auth import user_scope
