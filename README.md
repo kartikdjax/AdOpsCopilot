@@ -1,4 +1,4 @@
-# AI Analytics Copilot
+# AdOps Copilot
 
 Conversational analytics for AdTech data: natural-language Q&A, KPI
 summaries, trend analysis, anomaly explanations, health checks and
@@ -33,22 +33,42 @@ The question map and plan for Revive mode are in `docs/`.
 ## Run it locally
 
 ```bash
-docker compose up -d                                 # ClickHouse, adexchange schema applied on first start
+docker compose up -d                                 # ClickHouse (or use a ClickHouse you already run)
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env                                 # fill in GROQ_API_KEY and MYSQL_*
+cp .env.example .env                                 # fill in GROQ_API_KEY, MYSQL_* and CLICKHOUSE_*
 
-python -m src.adexchange_data.load_adexchange_data   # synthetic exchange data
-python -m src.revive_data.load_revive_data --claim revive608 --days 30   # first time only; see below
-python -m src.rag.load_seed_documents                # playbooks for search_knowledge_base
+python -m src.deploy.setup                           # create/load both databases + seed the knowledge base
+python -m src.api.manage_users add you@example.com --name You --role admin
 uvicorn src.api.main:app --port 8000
 ```
 
-Revive's MySQL stays outside compose: point `MYSQL_*` at a Revive 6.0.x
-install whose database the Copilot owns.
+`setup` creates the Revive tables in `MYSQL_DATABASE` if it has none (an
+empty database works) and the `adexchange` database in ClickHouse if it's
+missing, marks both as Copilot-owned, and loads synthetic data. It won't
+touch an existing database that isn't Copilot-owned: claim one explicitly
+with `load_revive_data --claim <database>` or
+`load_adexchange_data --claim adexchange`. The loaders on their own
+(`python -m src.revive_data.load_revive_data`,
+`python -m src.adexchange_data.load_adexchange_data`) reload one database.
 
 To run the API in a container too: `docker compose --profile app up -d`.
 Inside the container, `MYSQL_HOST=host.docker.internal` reaches a MySQL on
 the host (it must listen on more than 127.0.0.1).
+
+### Deploying
+
+`deploy/` holds a server deployment: the API (2 workers) and a data-refresh
+scheduler in containers behind the server's existing nginx or Apache at
+`/copilot/`, using the server's own MySQL and ClickHouse, with invite-only
+accounts. See [deploy/README.md](deploy/README.md) for the runbook.
+
+Settings that matter outside local development (all in `.env`):
+`ALLOW_SIGNUP` (default off; create accounts with
+`python -m src.api.manage_users add`), `COOKIE_SECURE`,
+`ENABLE_API_DOCS` (default off), and `MYSQL_LOADER_USERNAME` /
+`MYSQL_LOADER_PASSWORD` for a separate write user for the data loaders. The
+session cookie's path follows the proxy's `X-Forwarded-Prefix` header, or `/`
+when the app is opened directly.
 
 ### Health check
 
@@ -118,10 +138,12 @@ tool lists, schemas, results and errors in-memory, over stdio and over HTTP.
 
 ## Access
 
-Every new sign-up is `pending` and can't use Revive until an admin grants a
-role from the server (there's no web endpoint for this on purpose):
+Accounts are created on the server; sign-up over the web is off unless
+`ALLOW_SIGNUP=true`, and even then new accounts are `pending` (no Revive data)
+until someone grants a role. There's no web endpoint for roles, on purpose:
 
 ```bash
+python -m src.api.manage_users add you@example.com --name "You" --role admin   # prints a generated password once
 python -m src.api.manage_users list
 python -m src.api.manage_users set-role you@example.com admin
 python -m src.api.manage_users set-role ops@example.com manager --agency-id 2

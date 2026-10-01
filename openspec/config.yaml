@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  Product: AI Analytics Copilot - a standalone web app for conversational AdTech analytics. It is NOT a Revive
+  Product: AdOps Copilot (renamed from "AI Analytics Copilot"; never "Copilot" alone, to avoid confusion with Microsoft Copilot) - a standalone web app for conversational AdTech analytics. It is NOT a Revive
     plugin and must not be packaged as one; it reads Revive's database from outside. Single-tenant: one instance
     per customer, on-prem or in their own cloud. Git remote: kartikdjax/AdOpsCopilot (the user pushes; the
     sandbox can't reach GitHub).
@@ -22,6 +22,10 @@ context: |
     - Users, sessions and chat history live in SQLite (data/copilot.db, COPILOT_DB_PATH overrides). Roles:
       pending (default at sign-up), manager (limited to one Revive manager, rv_agency.agencyid), admin. Roles are
       granted only from the server CLI (python -m src.api.manage_users), never over the web.
+    - Sign-up is off unless ALLOW_SIGNUP; operators create accounts with `manage_users add`.
+    - Server deployment lives in deploy/ (compose with host networking, API on 127.0.0.1 behind the host's
+      nginx/Apache at /copilot/, setup + scheduler services, least-privilege MySQL users). Secrets only in
+      deploy/.env. Setup/loaders only write to databases carrying the Copilot marker (MySQL and ClickHouse).
     - A user's scope travels to MCP tools as request metadata (src/semantic/access.py), never as a tool argument.
       Revive tools fail closed without it.
   Data: all data is synthetic. Generators plant known scenarios and problems (src/revive_data/admin_fixtures.py

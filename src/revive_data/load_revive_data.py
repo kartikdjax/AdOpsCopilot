@@ -91,14 +91,23 @@ def load_dataset(host: str, port: int, database: str, username: str, password: s
     logger.info("Done. Verify with: SELECT count() FROM %s.%s", database, _FACT_TABLE)
 
 
+def connection_defaults() -> dict[str, str | int]:
+    """Where the loader connects by default: the app's MySQL host and database,
+    as the loader user when one is configured (MYSQL_LOADER_*), else the app user."""
+    settings = get_settings()
+    username, password = settings.loader_mysql_credentials
+    return {"host": settings.mysql_host, "port": settings.mysql_port, "database": settings.mysql_database,
+            "username": username, "password": password}
+
+
 if __name__ == "__main__":
-    settings = get_settings()  # defaults come from .env, like the app's own connection
+    defaults = connection_defaults()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default=settings.mysql_host)
-    parser.add_argument("--port", type=int, default=settings.mysql_port)
-    parser.add_argument("--database", default=settings.mysql_database)
-    parser.add_argument("--username", default=settings.mysql_username)
-    parser.add_argument("--password", default=settings.mysql_password)
+    parser.add_argument("--host", default=defaults["host"])
+    parser.add_argument("--port", type=int, default=defaults["port"])
+    parser.add_argument("--database", default=defaults["database"])
+    parser.add_argument("--username", default=defaults["username"])
+    parser.add_argument("--password", default=defaults["password"])
     parser.add_argument("--days", type=int, default=30)
     parser.add_argument("--claim", metavar="DATABASE",
                         help="mark DATABASE (must equal the target) as synthetic, then load into it")

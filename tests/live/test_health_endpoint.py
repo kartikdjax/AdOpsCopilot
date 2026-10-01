@@ -48,3 +48,9 @@ def test_health_degraded_hides_connection_details(admin, monkeypatch):
                    settings.mysql_username, settings.clickhouse_host, str(settings.clickhouse_port),
                    "adexchange", "localhost", "port=1", "refused"}:
         assert secret not in response.text, secret
+
+
+def test_api_docs_off_by_default(admin):
+    client = _health_client()
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(path).status_code == 404, path

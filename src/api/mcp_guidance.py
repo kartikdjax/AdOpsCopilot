@@ -42,5 +42,5 @@ async def tools(request: Request, user=Depends(get_current_user)):
     items = []
     for tool in result.tools:
         domain = TOOL_DOMAIN.get(tool.name, "shared")
-        items.append({"name": tool.name, "domain": domain, "description": tool.description or "", "guidance": GUIDANCE.get(tool.name, "The copilot may use this tool when its description matches your question.")})
+        items.append({"name": tool.name, "domain": domain, "description": tool.description or "", "guidance": GUIDANCE.get(tool.name, "AdOps Copilot may use this tool when its description matches your question.")})
     return {"tools": items}
